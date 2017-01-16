@@ -1,5 +1,6 @@
 package bangkokguy.development.android.notitest;
 
+import android.annotation.TargetApi;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.Service;
@@ -11,6 +12,9 @@ import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.PixelFormat;
 import android.graphics.Point;
+import android.hardware.usb.UsbConfiguration;
+import android.hardware.usb.UsbDevice;
+import android.hardware.usb.UsbManager;
 import android.os.BatteryManager;
 import android.os.Build;
 import android.os.IBinder;
@@ -20,6 +24,15 @@ import android.view.Display;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.util.HashMap;
+import java.util.Properties;
 
 import static android.content.Intent.ACTION_BATTERY_CHANGED;
 
@@ -42,7 +55,9 @@ public class ForegroundService extends Service {
             screenWidth,
             screenHeight;
 
-    final static int MAX_VIEW_HEIGHT = 24;
+    String eCurrMaxString;
+
+    final static int MAX_VIEW_HEIGHT = 40;
 
     @Override
     public void onCreate() {
@@ -86,6 +101,32 @@ public class ForegroundService extends Service {
                 new IntentFilter(ACTION_BATTERY_CHANGED));
     }
 
+    String getFileText () {
+        try {
+            File file = new File("/sys/class/power_supply/usb/current_max");
+            FileInputStream inStream = new FileInputStream(file);
+            InputStreamReader isr = new InputStreamReader(inStream);
+            BufferedReader br = new BufferedReader(isr);
+            StringBuilder sb = new StringBuilder();
+            String s;
+
+            while ((s = br.readLine()) != null) {
+                sb.append(s);
+
+            br.close();
+            inStream.close();
+            isr.close();
+
+            Log.d(TAG, "File:"+sb.toString());
+
+            return sb.toString();
+            }
+        } catch (IOException e) {
+            Log.e(TAG,"IOException in file read");
+        }
+        return "error";
+    }
+
     public class ReceiveBroadcast extends BroadcastReceiver {
 
         final private static boolean DEBUG=true;
@@ -101,9 +142,9 @@ public class ForegroundService extends Service {
                             eCurrentNow = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW);
                             eCurrentAverage = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_AVERAGE);
                             eChargeCounter = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER);
-                            Log.d(TAG, "BATTERY_PROPERTY_CURRENT_NOW="+Integer.toString(eCurrentNow));
-                            Log.d(TAG, "BATTERY_PROPERTY_CURRENT_AVERAGE="+Integer.toString(eCurrentAverage));
-                            Log.d(TAG, "BATTERY_PROPERTY_CHARGE_COUNTER="+Integer.toString(eChargeCounter));
+                            Log.d(TAG, "BATTERY_PROPERTY_CURRENT_NOW="+Long.toString(eCurrentNow));
+                            Log.d(TAG, "BATTERY_PROPERTY_CURRENT_AVERAGE="+Long.toString(eCurrentAverage));
+                            Log.d(TAG, "BATTERY_PROPERTY_CHARGE_COUNTER="+Long.toString(eChargeCounter));
                         }
                     //get extra info from intent
                     eVoltage = intent.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1);
@@ -112,6 +153,25 @@ public class ForegroundService extends Service {
                     break;
                 default: if(DEBUG)Log.d(TAG,"case default"); break;
             } // @formatter:on
+
+            eCurrMaxString = getFileText();
+
+            Properties prop = System.getProperties();
+
+            UsbConfiguration u = null;
+            UsbManager um = (UsbManager) getSystemService(USB_SERVICE);
+
+            //HashMap<String, UsbDevice> hm;
+
+            Log.d(TAG, um.getDeviceList().toString());
+
+            //if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+            //    int i = u.getMaxPower();
+            //}
+
+            Log.d(TAG,
+                    System.getProperties().toString() +
+                    System.getenv().toString());
         }
     }
 
@@ -138,12 +198,13 @@ public class ForegroundService extends Service {
             if(DEBUG)Log.d(TAG, "onDraw()");
 
             //canvas.drawLine(1,1,1,1,p);
+
             canvas.drawText(
                     " CurrentNow: "   + Integer.toString(eCurrentNow) +
-                    " CurrentAvg: "   + Integer.toString(eCurrentAverage) +
+                    " CurrentMax: "   + eCurrMaxString +
                     " ChargeCount: "  + Integer.toString(eChargeCounter) +
                     " Voltage: "      + Integer.toString(eVoltage),
-                    0, MAX_VIEW_HEIGHT, p);
+                    0, MAX_VIEW_HEIGHT-10, p);
         }
 
     }
